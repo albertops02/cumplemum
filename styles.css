@@ -279,7 +279,7 @@
     line-height:1.6;
   }
   
-  /* Galería de recompensa */
+/* Galería de recompensa */
 .gallery {
   margin-top: 14px;
   display: grid;
@@ -295,10 +295,37 @@
   border: 1px solid var(--line);
   background: #0c1431;
   box-shadow: 0 12px 30px rgba(0,0,0,.25);
+
+  /* Animación */
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  animation: popIn 520ms ease forwards;
+}
+
+/* Cascada: cada imagen entra un pelín después */
+.gallery img:nth-child(1) { animation-delay: 0ms; }
+.gallery img:nth-child(2) { animation-delay: 120ms; }
+.gallery img:nth-child(3) { animation-delay: 240ms; }
+.gallery img:nth-child(4) { animation-delay: 360ms; }
+
+@keyframes popIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .galleryTitle {
   margin-top: 12px;
   color: var(--text);
   font-weight: 800;
+}
+
+/* Accesibilidad: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .gallery img {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

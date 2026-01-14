@@ -29,12 +29,18 @@ const stages = [
       },
         
     {
-      title: "Prueba 2 — La palabra mágica",
-      text: "Escribe la palabra clave de algo muy vuestro (una canción, un lugar, un apodo…).",
-      placeholder: "Ej: aventura",
-      answer: "aventura",
-    },
-  
+  id: "song_guess",
+  title: "Prueba 2 — Adivina la canción 🎵",
+  text: "Pulsa ▶ para escuchar 5 segundos. Después escribe el título de la canción.",
+  placeholder: "Título de la canción…",
+  answer: "Morena mia", // <-- CAMBIA ESTO (en minúsculas)
+  audio: {
+    src: "./music/miguel-bose-morenamia.mp3",  // <-- CAMBIA ESTO (ruta al archivo de audio)
+    preview: { start: 0, duration: 5 },   // 5 segundos para adivinar
+    success: { start: 5, duration: 20 }    // al acertar suena un trozo más
+  }
+},
+
     {
       title: "Prueba 3 — Código secreto",
       text: "Busca una nota escondida. En la nota hay un código de 4 letras. Escríbelo aquí.",
@@ -95,6 +101,62 @@ const stages = [
     return val === expected;
   }
   
+  /* =========================
+   AUDIO HELPERS
+   ========================= */
+
+let audioEl = null;
+let audioTimer = null;
+
+function ensureAudio(src) {
+  if (!audioEl) {
+    audioEl = new Audio();
+    audioEl.preload = "auto";
+  }
+
+  // Evita recargar el audio si es el mismo
+  const absoluteSrc = new URL(src, window.location.href).href;
+  if (audioEl.src !== absoluteSrc) {
+    audioEl.src = src;
+  }
+
+  return audioEl;
+}
+
+async function playSegment({ src, start, duration }, onError) {
+  try {
+    const a = ensureAudio(src);
+
+    // Limpiamos cualquier reproducción previa
+    clearTimeout(audioTimer);
+    audioTimer = null;
+
+    a.pause();
+    a.currentTime = Math.max(0, start || 0);
+
+    // Reproduce (debe venir de interacción del usuario)
+    await a.play();
+
+    if (duration && duration > 0) {
+      audioTimer = setTimeout(() => {
+        a.pause();
+      }, duration * 1000);
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Audio error:", err);
+    if (onError) onError(err);
+    return false;
+  }
+}
+
+function stopAudio() {
+  if (!audioEl) return;
+  clearTimeout(audioTimer);
+  audioTimer = null;
+  audioEl.pause();
+}
   
   /* =========================
      PROGRESS
@@ -209,85 +271,161 @@ const stages = [
     };
   }
   
-  function renderPuzzle(stage) {
-    stageCard.className = "card";
-    stageCard.innerHTML = `
-      <h2>${stage.title}</h2>
-      <p>${stage.text}</p>
-  
-      <div class="row">
-        <input id="answerInput" placeholder="${stage.placeholder || "Escribe aquí…"}" autocomplete="off" />
-        <button id="checkBtn">Comprobar</button>
+function renderPuzzle(stage) {
+  stopAudio(); // por si venimos de una pantalla con audio
+
+  const hasAudio = !!stage.audio;
+
+  stageCard.className = "card";
+  stageCard.innerHTML = `
+    <h2>${stage.title}</h2>
+    <p>${stage.text}</p>
+
+    ${hasAudio ? `
+      <div class="row" style="margin-bottom:10px;">
+        <button class="secondary" id="playPreviewBtn">▶ Escuchar 5 segundos</button>
+        <button class="secondary" id="stopAudioBtn">⏸ Parar</button>
       </div>
-  
-      <div class="msg" id="msg"></div>
-  
-      <p class="small" style="margin-top:10px;">
-        Tip: escribe la respuesta y pulsa Enter.
-      </p>
-    `;
-  
-    const input = document.getElementById("answerInput");
-    const msg = document.getElementById("msg");
-  
-    const check = () => {
-        const ok = isAnswerCorrect(input.value, stage.answer);
-      
-        if (ok) {
-          // Si esta prueba tiene galería de éxito, la mostramos y no avanzamos aún
-          if (stage.onSuccessGallery && stage.onSuccessGallery.length) {
-            msg.textContent = "¡Correcto! Mira estas fotos sorpresa 📸";
-            msg.className = "msg good";
-      
-            // Deshabilitamos input/botón para que no se vuelva a enviar
-            input.disabled = true;
-            document.getElementById("checkBtn").disabled = true;
-      
-            // Pintamos galería + botón continuar
-            const galleryHtml = `
-              <div class="galleryTitle">🎉 ¡Recompensa desbloqueada!</div>
-              <div class="gallery">
-                ${stage.onSuccessGallery.map(p => `
-                  <img src="${p.src}" alt="${p.alt || "foto"}" loading="lazy" />
-                `).join("")}
-              </div>
-              <div class="row" style="margin-top:14px;">
-                <button id="continueBtn">Continuar ➜</button>
-              </div>
-            `;
-      
-            // Insertamos debajo del mensaje
-            msg.insertAdjacentHTML("afterend", galleryHtml);
-      
-            // Al continuar avanzamos a la siguiente prueba
-            document.getElementById("continueBtn").onclick = () => {
-              current += 1;
-              save();
-              renderAll();
-            };
-      
-            return;
-          }
-      
-          // Si no hay galería, comportamiento normal
-          msg.textContent = "¡Correcto! Desbloqueando la siguiente prueba… ✅";
-          msg.className = "msg good";
+      <div class="msg" id="audioMsg"></div>
+    ` : ""}
+
+    <div class="row">
+      <input id="answerInput" placeholder="${stage.placeholder || "Escribe aquí…"}" autocomplete="off" />
+      <button id="checkBtn">Comprobar</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <p class="small" style="margin-top:10px;">
+      Tip: escribe la respuesta y pulsa Enter.
+    </p>
+  `;
+
+  const input = document.getElementById("answerInput");
+  const msg = document.getElementById("msg");
+
+  // Controles de audio (si aplica)
+  if (hasAudio) {
+    const audioMsg = document.getElementById("audioMsg");
+    const playPreviewBtn = document.getElementById("playPreviewBtn");
+    const stopAudioBtn = document.getElementById("stopAudioBtn");
+
+    playPreviewBtn.onclick = async () => {
+      audioMsg.textContent = "Reproduciendo fragmento…";
+      audioMsg.className = "msg";
+
+      const ok = await playSegment(
+        {
+          src: stage.audio.src,
+          start: stage.audio.preview.start,
+          duration: stage.audio.preview.duration
+        },
+        () => {}
+      );
+
+      if (!ok) {
+        audioMsg.textContent = "No se pudo reproducir el audio. Prueba a subir el volumen o abrirlo en Chrome.";
+        audioMsg.className = "msg bad";
+      }
+    };
+
+    stopAudioBtn.onclick = () => {
+      stopAudio();
+      audioMsg.textContent = "Audio detenido.";
+      audioMsg.className = "msg";
+    };
+  }
+
+  const check = async () => {
+    const ok = isAnswerCorrect(input.value, stage.answer);
+
+    if (ok) {
+      // Si tiene audio, al acertar reproducimos un trozo más
+      if (stage.audio) {
+        msg.textContent = "¡Correcto! 🎉 Escucha un trocito más…";
+        msg.className = "msg good";
+
+        // Deshabilitar para evitar dobles clicks
+        input.disabled = true;
+        document.getElementById("checkBtn").disabled = true;
+
+        // Reproduce segmento “success”
+        const played = await playSegment(
+          {
+            src: stage.audio.src,
+            start: stage.audio.success.start,
+            duration: stage.audio.success.duration
+          },
+          () => {}
+        );
+
+        // Botón continuar
+        msg.insertAdjacentHTML("afterend", `
+          <div class="row" style="margin-top:14px;">
+            <button id="continueBtn">Continuar ➜</button>
+          </div>
+          ${played ? "" : `<div class="msg bad" style="margin-top:10px;">(No se pudo reproducir el audio, pero puedes continuar)</div>`}
+        `);
+
+        document.getElementById("continueBtn").onclick = () => {
+          stopAudio();
           current += 1;
           save();
-          setTimeout(renderAll, 550);
-      
-        } else {
-          msg.textContent = "Mmm… no es. Prueba otra vez 😈";
-          msg.className = "msg bad";
-        }
-      };
-      
-  
-    document.getElementById("checkBtn").onclick = check;
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") check();
-    });
-  }
+          renderAll();
+        };
+
+        return;
+      }
+
+      // Si tiene galería de éxito (Prueba 1)
+      if (stage.onSuccessGallery && stage.onSuccessGallery.length) {
+        msg.textContent = "¡Correcto! Mira estas fotos sorpresa 📸";
+        msg.className = "msg good";
+
+        input.disabled = true;
+        document.getElementById("checkBtn").disabled = true;
+
+        const galleryHtml = `
+          <div class="galleryTitle">🎉 ¡Recompensa desbloqueada!</div>
+          <div class="gallery">
+            ${stage.onSuccessGallery.map(p => `
+              <img src="${p.src}" alt="${p.alt || "foto"}" loading="lazy" />
+            `).join("")}
+          </div>
+          <div class="row" style="margin-top:14px;">
+            <button id="continueBtn">Continuar ➜</button>
+          </div>
+        `;
+
+        msg.insertAdjacentHTML("afterend", galleryHtml);
+
+        document.getElementById("continueBtn").onclick = () => {
+          current += 1;
+          save();
+          renderAll();
+        };
+
+        return;
+      }
+
+      // Normal
+      msg.textContent = "¡Correcto! Desbloqueando la siguiente prueba… ✅";
+      msg.className = "msg good";
+      current += 1;
+      save();
+      setTimeout(renderAll, 550);
+
+    } else {
+      msg.textContent = "Mmm… no es. Prueba otra vez 😈";
+      msg.className = "msg bad";
+    }
+  };
+
+  document.getElementById("checkBtn").onclick = check;
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") check();
+  });
+}
   
   function renderStage() {
     const stage = stages[current] || stages[stages.length - 1];
