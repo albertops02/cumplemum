@@ -15,12 +15,19 @@ const stages = [
     },
   
     {
-      title: "Prueba 1 — La fecha",
-      text: "Introduce un código relacionado con una fecha especial. (Formato sugerido: DDMM)",
-      placeholder: "Ej: 1206",
-      answer: "1206",
-    },
-  
+        id: "luck13",
+        title: "Prueba 1 — El número de la suerte",
+        text: "¿Cuál es el número de la suerte?",
+        placeholder: "Escribe el número…",
+        answer: "13",
+        onSuccessGallery: [
+          { src: "./images/foto1.jpg", alt: "Foto 1" },
+          { src: "./images/foto2.jpg", alt: "Foto 2" },
+          { src: "./images/foto3.jpg", alt: "Foto 3" },
+          { src: "./images/foto4.jpg", alt: "Foto 4" },
+        ]
+      },
+        
     {
       title: "Prueba 2 — La palabra mágica",
       text: "Escribe la palabra clave de algo muy vuestro (una canción, un lugar, un apodo…).",
@@ -224,19 +231,57 @@ const stages = [
     const msg = document.getElementById("msg");
   
     const check = () => {
-      const ok = isAnswerCorrect(input.value, stage.answer);
-  
-      if (ok) {
-        msg.textContent = "¡Correcto! Desbloqueando la siguiente prueba… ✅";
-        msg.className = "msg good";
-        current += 1;
-        save();
-        setTimeout(renderAll, 550);
-      } else {
-        msg.textContent = "Mmm… no es. Prueba otra vez 😈";
-        msg.className = "msg bad";
-      }
-    };
+        const ok = isAnswerCorrect(input.value, stage.answer);
+      
+        if (ok) {
+          // Si esta prueba tiene galería de éxito, la mostramos y no avanzamos aún
+          if (stage.onSuccessGallery && stage.onSuccessGallery.length) {
+            msg.textContent = "¡Correcto! Mira estas fotos sorpresa 📸";
+            msg.className = "msg good";
+      
+            // Deshabilitamos input/botón para que no se vuelva a enviar
+            input.disabled = true;
+            document.getElementById("checkBtn").disabled = true;
+      
+            // Pintamos galería + botón continuar
+            const galleryHtml = `
+              <div class="galleryTitle">🎉 ¡Recompensa desbloqueada!</div>
+              <div class="gallery">
+                ${stage.onSuccessGallery.map(p => `
+                  <img src="${p.src}" alt="${p.alt || "foto"}" loading="lazy" />
+                `).join("")}
+              </div>
+              <div class="row" style="margin-top:14px;">
+                <button id="continueBtn">Continuar ➜</button>
+              </div>
+            `;
+      
+            // Insertamos debajo del mensaje
+            msg.insertAdjacentHTML("afterend", galleryHtml);
+      
+            // Al continuar avanzamos a la siguiente prueba
+            document.getElementById("continueBtn").onclick = () => {
+              current += 1;
+              save();
+              renderAll();
+            };
+      
+            return;
+          }
+      
+          // Si no hay galería, comportamiento normal
+          msg.textContent = "¡Correcto! Desbloqueando la siguiente prueba… ✅";
+          msg.className = "msg good";
+          current += 1;
+          save();
+          setTimeout(renderAll, 550);
+      
+        } else {
+          msg.textContent = "Mmm… no es. Prueba otra vez 😈";
+          msg.className = "msg bad";
+        }
+      };
+      
   
     document.getElementById("checkBtn").onclick = check;
     input.addEventListener("keydown", (e) => {
