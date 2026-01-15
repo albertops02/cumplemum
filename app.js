@@ -445,6 +445,7 @@ function renderPuzzle(stage) {
      INIT
      ========================= */
   
-  load();
-  renderAll();
-  
+// Siempre empezar desde la portada (no recordar progreso)
+localStorage.removeItem(KEY);
+current = 0;
+renderAll();
